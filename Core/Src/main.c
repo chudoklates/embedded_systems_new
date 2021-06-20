@@ -25,8 +25,8 @@
 #include "bme280.h"
 #include "bme280_control.h"
 #include "bme280_defs.h"
+#include "lcd16x2.h"
 #include <stdio.h>
-#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,6 +107,7 @@ int8_t bme280_init_indoor(void) {
 int8_t bme280_read(void) {
 	int8_t rslt;
 
+	printf("Temperature, Pressure, Humidity\r\n");
 	/* Delay while the sensor completes a measurement */
 	dev.delay_us(70, dev.intf_ptr);
 	rslt = bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
@@ -118,7 +119,8 @@ int8_t bme280_read(void) {
 void print_sensor_data(struct bme280_data *comp_data)
 {
 #ifdef BME280_FLOAT_ENABLE
-        printf("ESP_READ:%0.2f, %0.2f, %0.2f\r\n",comp_data->temperature, comp_data->pressure, comp_data->humidity);
+        printf("%0.2f, %0.2f, %0.2f\r\n",comp_data->temperature, comp_data->pressure, comp_data->humidity);
+
 #else
         printf("%ld, %ld, %ld\r\n",comp_data->temperature, comp_data->pressure, comp_data->humidity);
 #endif
@@ -169,7 +171,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -185,25 +186,51 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   printf("BME Configuration Start!\n\r");
+
   if((err = bme280_init_indoor()) != BME280_OK) {
 	  printf("BME Configuration failed, code: %d\n\r", err);
 	  return 1;
   }
+
   printf("BME Configuration Complete!\n\r");
+
+  lcd16x2_init_4bits(RS_GPIO_Port,RS_Pin,E_Pin,D4_GPIO_Port,D4_Pin,D5_Pin,D6_Pin,D7_Pin);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
-	  HAL_UART_Receive(&huart2, buffer, sizeof(buffer), 1000);
-	  printf("Buffer: %d", buffer[1]);
-	  HAL_Delay(1000);
-	  //	  if((err = bme280_read()) != BME280_OK) {
-	  //		  printf("Read error, code: %d\n\r", err);
-	  //		  return 1;
-	  //	  }
-	  //	  HAL_Delay(10000);
+	  	  if((err = bme280_read()) != BME280_OK) {
+	  		  printf("Read error, code: %d\n\r", err);
+	  		  return 1;
+	  	  }
+
+	  	 lcd16x2_1stLine();
+	  	 lcd16x2_printf("Temperature:");
+	  	 lcd16x2_2ndLine();
+	  	 lcd16x2_printf("%0.2f%cC", comp_data.temperature, 223);
+
+	  	 HAL_Delay(3000);
+	  	 lcd16x2_clear();
+
+	  	 lcd16x2_1stLine();
+	  	 lcd16x2_printf("Pressure:");
+	  	 lcd16x2_2ndLine();
+	  	 lcd16x2_printf("%0.2fhPa", comp_data.pressure/100);
+
+	  	 HAL_Delay(3000);
+		 lcd16x2_clear();
+
+	  	 lcd16x2_1stLine();
+	  	 lcd16x2_printf("Humidity:");
+	  	 lcd16x2_2ndLine();
+	  	 lcd16x2_printf("%0.2f%%", comp_data.humidity);
+
+	  	 HAL_Delay(3000);
+		 lcd16x2_clear();
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -339,13 +366,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|D4_Pin|D5_Pin|D6_Pin
+                          |D7_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, RS_Pin|E_Pin|RW_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -353,6 +381,27 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : RS_Pin E_Pin RW_Pin */
+  GPIO_InitStruct.Pin = RS_Pin|E_Pin|RW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC6 PC7 PC8 PC9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : D4_Pin D5_Pin D6_Pin D7_Pin */
+  GPIO_InitStruct.Pin = D4_Pin|D5_Pin|D6_Pin|D7_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
